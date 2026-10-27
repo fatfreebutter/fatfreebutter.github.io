@@ -425,7 +425,7 @@ const arrows = {
 Object.values(arrows).forEach(a => { a.line.material.linewidth = 3; scene.add(a); });
 
 // rings
-const ringGeo = new THREE.TorusGeometry(42, 3.2, 10, 40);
+const ringGeo = new THREE.TorusGeometry(50, 3.4, 10, 40);
 let ringMeshes = [];
 function buildRings(rings) {
   ringMeshes.forEach(m => scene.remove(m)); ringMeshes = [];
@@ -463,7 +463,8 @@ function step(s, dt) {
   // wing tilt follows the stick
   s.aT = clamp(s.aT + jy * 7 * dt, s.ground ? 0 : -6, 20);
   const maxRate = clamp(1.6 * G / Math.max(s.V, 1) * R2D, 7, 20);
-  let ad = clamp((s.aT - s.alpha) * 3, -maxRate, maxRate);
+  // a gentle built-in damper (like a stable training plane) so the nose doesn't porpoise up and down
+  let ad = clamp((s.aT - (s.ground ? 0 : (s.gdot || 0) * 0.6) - s.alpha) * 3, -maxRate, maxRate);
   const stall = s.alpha > STALL && !s.ground && s.V > 3;
   if (stall && !s.stalled) { s.everStalled = true; beep(520, .15); }
   s.stalled = stall;
@@ -484,14 +485,19 @@ function step(s, dt) {
   if (s.ground) {
     const up = L + T * Math.sin(a * D2R);
     if (up > G) { s.ground = false; }
-    else { const mu = s.thr < 0.05 ? 0.45 : 0.02; dV -= mu * (G - up); s.psi += jx * 6 * D2R * dt * clamp(s.V / 30, 0, 1); }
+    else {
+      const mu = s.thr < 0.05 ? 0.45 : 0.02; dV -= mu * (G - up);
+      // nose-wheel steering helper: keeps her rolling straight down the runway
+      if (onRunway(s.x, s.z) || s.x < RUNWAY.x0) s.psi += (-s.psi * 1.5 - s.z * 0.004 + jx * 0.1) * dt * clamp(s.V / 20, 0, 1);
+    }
   }
   s.V = Math.max(0, s.V + dV * dt);
   if (!s.ground) {
-    s.gam += (L * Math.cos(s.phi) + T * Math.sin(a * D2R) - G * Math.cos(s.gam)) / V * dt;
+    const gd = (L * Math.cos(s.phi) + T * Math.sin(a * D2R) - G * Math.cos(s.gam)) / V;
+    s.gdot = gd * R2D; s.gam += gd * dt;
     s.gam = clamp(s.gam, -80 * D2R, 80 * D2R);
     s.psi += L * Math.sin(s.phi) / (V * Math.max(0.2, Math.cos(s.gam))) * dt;
-  } else s.gam = 0;
+  } else { s.gam = 0; s.gdot = 0; }
   const ch = Math.cos(s.gam);
   s.x += s.V * ch * Math.cos(s.psi) * dt; s.z += s.V * ch * Math.sin(s.psi) * dt; s.y += s.V * Math.sin(s.gam) * dt;
   s.F = { L, D, T };
@@ -508,7 +514,7 @@ function touchdown(s) {
     return crash(s, 'Bonk! The plane bumped into the ground. Keep an eye on your height, especially near the hills.');
   }
   if (!s.gear) return crash(s, 'Belly landing! We forgot the wheels. Press Wheels (or G) before landing.');
-  if (vs < -6.5) return crash(s, 'Bonk, way too hard! Come in slower and flatter, and lift the nose a tiny bit right before touchdown.');
+  if (vs < -7.5) return crash(s, 'Bonk, way too hard! Come in slower and flatter, and lift the nose a tiny bit right before touchdown.');
   if (Math.abs(s.phi) > 12 * D2R) return crash(s, 'A wingtip touched the runway! Level the wings (let go of left/right) before landing.');
   if (theta < -4) return crash(s, 'Nose wheel first! Lift the nose a tiny bit just before you touch down.');
   s.ground = true; s.gam = 0; s.y = 0; s.phi = 0; s.landed = true; s.touchVs = vs; s.alpha = Math.max(0, theta);
@@ -566,14 +572,14 @@ const MISSIONS = [
     } },
   { id: 'rings', n: 2, title: 'Lean to turn', short: 'Follow a trail of rings around the island',
     brief: "To turn, a plane leans, like a bicycle going round a corner. Push the stick left or right to lean; let go and the wings level out again. While leaning, add a little nose up so you don't sink. Follow the pink arrow!",
-    goal: 'Goal: fly through at least 5 of the 7 rings.',
+    goal: 'Goal: fly through at least 4 of the 7 rings.',
     learn: 'Planes turn by leaning (pilots call it banking). Leaning tips the lift sideways, which pulls the plane round the curve.',
     start: { x: 400, y: 320, z: 0, v: 300, psi: 0, gear: false },
     setup(s) { s.rings = ringPath({ x: 400, y: 320, z: 0 }, [[0, 0], [35, 40], [35, 40], [20, 0], [-40, -60], [-45, -40], [-20, 30]]); buildRings(s.rings); },
     chips: s => [`Rings ${s.ringsHit} / ${s.rings.length}`],
     target: s => s.rings.find(r => r.hit === null),
     check(s) {
-      if (s.rings.every(r => r.hit !== null)) return s.ringsHit >= 5 ? { win: s.ringsHit >= 7 ? 3 : s.ringsHit >= 6 ? 2 : 1, note: s.ringsHit < 7 ? `You got ${s.ringsHit} of 7. Get all 7 for three stars!` : 'All seven rings!' } : { fail: `${s.ringsHit} of 7 rings. Start turning a bit earlier, and use gentle leans. The pink arrow always points to the next ring.` };
+      if (s.rings.every(r => r.hit !== null)) return s.ringsHit >= 4 ? { win: s.ringsHit >= 7 ? 3 : s.ringsHit >= 6 ? 2 : 1, note: s.ringsHit < 7 ? `You got ${s.ringsHit} of 7. Get all 7 for three stars!` : 'All seven rings!' } : { fail: `${s.ringsHit} of 7 rings. Start turning a bit earlier, and use gentle leans. The pink arrow always points to the next ring.` };
     },
     coach(s) {
       const v = kmh(s), r = s.rings.find(r => r.hit === null);
@@ -591,12 +597,12 @@ const MISSIONS = [
     brief: 'Real pilots practise this. Take the power all the way off, then hold the stick up so the nose keeps rising. Watch the wing-tilt meter go yellow, then red. When the plane stalls and wobbles, fix it: nose down, power up.',
     goal: 'Goal: make the plane stall, then recover to normal flight.',
     learn: 'A stall happens when the wing is tilted too much and the air stops following it. The fix is always the same: nose down, power up.',
-    start: { x: -3000, y: 900, z: 0, v: 300, psi: 0, gear: false },
+    start: { x: -1500, y: 900, z: -4500, v: 300, psi: 90, gear: false },
     setup(s) { s.phase = 'pull'; },
     chips: s => [s.phase === 'pull' ? 'Step 1: make it stall' : 'Step 2: recover!'],
     target: () => null,
     check(s) {
-      if (s.phase === 'pull' && s.stalled && kmh(s) < 260) { s.phase = 'recover'; s.stallAlt = s.y; s.minAlt = s.y; s.stallT = s.t; }
+      if (s.phase === 'pull' && s.stalled && kmh(s) < 270) { s.phase = 'recover'; s.stallAlt = s.y; s.minAlt = s.y; s.stallT = s.t; }
       if (s.phase === 'recover') {
         s.minAlt = Math.min(s.minAlt, s.y);
         if (s.t - s.stallT > 2 && !s.stalled && s.alpha < 10 && kmh(s) > 230 && Math.sin(s.gam) * s.V > -3) {
@@ -617,10 +623,10 @@ const MISSIONS = [
       return 'Now gently level out. Nose up just a little.';
     } },
   { id: 'glide', n: 4, title: 'Engines off!', short: 'Glide to the runway without engines',
-    brief: "Both engines stopped (don't worry, only in this game). You're 800 m up and the runway is 7.5 km ahead. Keep your speed around 250 km/h for a long, calm glide, stay lined up, and put the wheels down before landing.",
+    brief: "Both engines stopped (don't worry, only in this game). You're 650 m up and the runway is 7.5 km ahead. Keep your speed around 250 km/h for a long, calm glide, stay lined up, and put the wheels down before landing.",
     goal: 'Goal: glide all the way and land gently on the runway.',
     learn: "No engines doesn't mean falling. The wings keep working as long as you keep moving, so the plane glides a long way.",
-    start: { x: -7500, y: 800, z: 0, v: 250, psi: 0, gear: false, engineOut: true },
+    start: { x: -7500, y: 650, z: 0, v: 250, psi: 0, gear: false, engineOut: true },
     chips: s => [`Runway in ${Math.max(0, -s.x / 1000).toFixed(1)} km`, 'Engines off'],
     target: s => (s.x < 0 ? { x: 150, y: 0, z: 0 } : null),
     check: landCheck,
@@ -692,7 +698,7 @@ function ringPass(s, px, py, pz) {
     const d0 = (px - r.x) * nx + (pz - r.z) * nz, d1 = (s.x - r.x) * nx + (s.z - r.z) * nz;
     if (d0 < 0 && d1 >= 0) {
       const lat = -(s.x - r.x) * nz + (s.z - r.z) * nx, off = Math.hypot(lat, s.y - r.y);
-      if (off < 60 || !s.free) { r.hit = off < 42; paintRing(r); if (r.hit) { s.ringsHit++; beep(880, .12); setTimeout(() => beep(1320, .15), 90); for (let i = 0; i < 14; i++) spawnPuff({ x: r.x + (Math.random() - .5) * 60, y: r.y + (Math.random() - .5) * 60, z: r.z + (Math.random() - .5) * 60 }, 3, 1); } }
+      if (off < 70 || !s.free) { r.hit = off < 50; paintRing(r); if (r.hit) { s.ringsHit++; beep(880, .12); setTimeout(() => beep(1320, .15), 90); for (let i = 0; i < 14; i++) spawnPuff({ x: r.x + (Math.random() - .5) * 60, y: r.y + (Math.random() - .5) * 60, z: r.z + (Math.random() - .5) * 60 }, 3, 1); } }
     } else if (!s.free && d1 > 400 && r.hit === null) { r.hit = false; paintRing(r); }
   }
 }
@@ -820,6 +826,7 @@ function hud(dt) {
   else if (s.stalled) { w.hidden = false; w.className = 'warn'; w.textContent = 'STALL!'; }
   else if (!s.ground && s.alpha > 12) { w.hidden = false; w.className = 'warn y'; w.textContent = 'careful, near stall'; }
   else if (!s.ground && s.agl < 120 && vs < -7) { w.hidden = false; w.className = 'warn y'; w.textContent = 'pull up!'; }
+  else if (!s.ground && terrainH(s.x + Math.cos(s.psi) * 900, s.z + Math.sin(s.psi) * 900) > s.y - 60) { w.hidden = false; w.className = 'warn y'; w.textContent = 'hills ahead! turn or climb'; }
   else w.hidden = true;
   $('#chips').innerHTML = `<span class="chip acc">Lesson ${mission.n}</span>` + mission.chips(s).map(c => `<span class="chip">${c}</span>`).join('');
   const t = s.crashed ? '' : (s.stalled && mission.id !== 'stall' ? 'STALL! Stick <b>down</b> and add <b>power</b>!' : mission.coach(s));
@@ -830,7 +837,7 @@ function hud(dt) {
 let last = performance.now(), acc = 0, mapT = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (S && !paused) {
+  if (S && !paused && !extSim) {
     if (mode === 'fly' && !S.engineOut && !S.crashed) { if (input.thrUp) S.thr = clamp(S.thr + dt * 0.6, 0, 1); if (input.thrDown) S.thr = clamp(S.thr - dt * 0.6, 0, 1); }
     if (!S.crashed) { acc += dt * TS; const h = 1 / 120; while (acc >= h) { const px = S.x, py = S.y, pz = S.z; step(S, h); if (S.rings.length) ringPass(S, px, py, pz); acc -= h; if (S.crashed) break; } }
     if (mode === 'fly' && mission) {
@@ -932,7 +939,11 @@ addEventListener('blur', () => { held.clear(); keyAxes(); });
 /* ---------- boot ---------- */
 attract(); setMode('menu'); $('#loading').hidden = true;
 requestAnimationFrame(frame);
-window.__fly = { get S() { return S; }, input, MISSIONS, startMission, get mode() { return mode; } }; // for automated playtesting
+// for automated playtesting: run the physics without rendering
+let extSim = false;
+window.__fly = { get S() { return S; }, input, MISSIONS, startMission, get mode() { return mode; },
+  tick(n = 1) { extSim = true; for (let i = 0; i < n && !S.done; i++) { const px = S.x, py = S.y, pz = S.z; step(S, 1 / 120); if (S.rings.length) ringPass(S, px, py, pz); if (!S.done && mission) { const r = mission.check(S); if (r) { S.done = true; S.result = r; } } } if (S.crashed && !S.result) S.result = pendingResult; return S.done; },
+  release() { extSim = false; } };
 </script>
 </body>
 </html>
