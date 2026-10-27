@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Katja's Flying Lessons</title>
+<meta name="description" content="Fly a little plane yourself: take off, fly through rings, survive a stall, glide and land.">
+<meta property="og:title" content="Katja's Flying Lessons ✈︎">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 18'%3E%3Cpath fill='%23ff6b8f' d='M10 17 L2 9 Q-1 5 2 2 Q6 -1 10 4 Q14 -1 18 2 Q21 5 18 9 Z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&family=Shantell+Sans:wght@500;700&display=swap">
+<style>
+/* Layout: a cockpit on a page. Sky window (canvas) on top with coach + objective overlays,
+   a cardboard instrument panel below, then big friendly controls. Menu/brief/result cards swap into the lower area. */
+:root{
+  --bg:#eaf4ff; --sky1:#bfe1ff; --sky2:#ffe6ef; --skyhi:#7fbfff;
+  --ink:#27304b; --muted:#5b6585; --card:#ffffff; --chip:#f1f5fc;
+  --accent:#ff6b8f; --accent-soft:#ffd3df; --accent-ink:#ffffff;
+  --sun:#ffc94a; --cloud:#ffffff; --plane:#ffffff; --wing:#dbe6f6;
+  --outline:#27304b; --window:#7cc4ff; --blush:#ffb0c4;
+  --air:#3b9cff; --ground:#a7dc9e; --ground2:#8fcf86; --hill:#c3e6b4; --runway:#596178; --dash:#ffffff;
+  --good:#3fbf7f; --warn:#ffb020; --bad:#ff4d6d;
+  --display:"Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  --body:"Nunito","Segoe UI",system-ui,sans-serif;
+  --hand:"Shantell Sans","Comic Sans MS","Segoe Print",cursive;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121933; --sky1:#18224a; --sky2:#35285a; --skyhi:#0b1230;
+  --ink:#eef1ff; --muted:#aeb6d9; --card:#1d2650; --chip:#252f5c;
+  --accent:#ff7fa2; --accent-soft:#4b2b54; --accent-ink:#1a1030;
+  --sun:#ffe7a3; --cloud:#46548a; --plane:#f5f7ff; --wing:#cfd9ef;
+  --outline:#27304b; --window:#7cc4ff; --blush:#ffb0c4;
+  --air:#7cc4ff; --ground:#2d5a43; --ground2:#264d39; --hill:#2a4a46; --runway:#3a4160; --dash:#d8deef;
+  --good:#4fd08f; --warn:#ffc04a; --bad:#ff6b85; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121933; --sky1:#18224a; --sky2:#35285a; --skyhi:#0b1230;
+  --ink:#eef1ff; --muted:#aeb6d9; --card:#1d2650; --chip:#252f5c;
+  --accent:#ff7fa2; --accent-soft:#4b2b54; --accent-ink:#1a1030;
+  --sun:#ffe7a3; --cloud:#46548a; --plane:#f5f7ff; --wing:#cfd9ef;
+  --outline:#27304b; --window:#7cc4ff; --blush:#ffb0c4;
+  --air:#7cc4ff; --ground:#2d5a43; --ground2:#264d39; --hill:#2a4a46; --runway:#3a4160; --dash:#d8deef;
+  --good:#4fd08f; --warn:#ffc04a; --bad:#ff6b85; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;
+  padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px));padding-block:14px 28px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .07 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>")}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.title{font-family:var(--display);font-weight:800;font-size:clamp(22px,4vw,30px);line-height:1;margin:0}
+.title small{display:block;font-family:var(--hand);font-weight:700;font-size:14px;color:var(--accent);margin-top:4px}
+.toplinks{display:flex;gap:8px;flex-wrap:wrap}
+a.link,.mini{font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);background:var(--chip);border:0;border-radius:999px;padding:7px 14px;text-decoration:none;cursor:pointer}
+
+/* sky window */
+.sky{position:relative;border-radius:24px;overflow:hidden;aspect-ratio:16/9;max-width:100%;background:var(--sky1);
+  box-shadow:inset 0 0 0 3px color-mix(in srgb,var(--outline) 12%,transparent),0 14px 30px -20px #27304b88;touch-action:none;user-select:none;-webkit-user-select:none}
+@media (max-width:600px){.sky{aspect-ratio:1/1;border-radius:18px}.coach .bub{font-size:13px}}
+.sky canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.chipbar{position:absolute;left:10px;top:10px;right:60px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.chip{font-family:var(--display);font-weight:700;font-size:14px;background:color-mix(in srgb,var(--card) 88%,transparent);color:var(--ink);border-radius:999px;padding:3px 12px;box-shadow:0 2px 8px -4px #0004;font-variant-numeric:tabular-nums}
+.chip.acc{background:var(--accent);color:var(--accent-ink)}
+.coach{position:absolute;left:10px;right:10px;top:50px;display:flex;gap:8px;align-items:flex-start;pointer-events:none;transition:opacity .3s}
+.coach .who{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--accent);display:grid;place-items:center;box-shadow:0 2px 8px -3px #0006}
+.coach .bub{font-family:var(--hand);font-weight:700;font-size:15px;line-height:1.35;background:color-mix(in srgb,var(--card) 94%,transparent);color:var(--ink);
+  border-radius:4px 16px 16px 16px;padding:8px 12px;max-width:560px;box-shadow:0 4px 14px -6px #0005}
+.coach .bub b{color:var(--accent)}
+.coach.hide{opacity:0}
+.warn{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-family:var(--hand);font-weight:700;font-size:clamp(24px,5vw,40px);color:var(--bad);
+  background:color-mix(in srgb,var(--card) 85%,transparent);padding:2px 18px;border-radius:14px;pointer-events:none;animation:blink .5s steps(2) infinite}
+.warn.y{color:var(--warn);animation-duration:.9s;font-size:clamp(18px,3.5vw,26px)}
+@keyframes blink{50%{opacity:.35}}
+.pausebtn{position:absolute;right:10px;top:10px;width:40px;height:40px;border-radius:50%;border:0;background:color-mix(in srgb,var(--card) 88%,transparent);color:var(--ink);font:800 16px var(--display);cursor:pointer}
+.pausecard{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:blur(2px)}
+.pausecard div{background:var(--card);border-radius:20px;padding:16px 20px;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center}
+.pausecard h3{font-family:var(--display);margin:0;font-size:26px}
+
+/* panel */
+.panel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:600px){.panel{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.g{background:var(--card);border-radius:16px;padding:8px 12px;display:flex;flex-direction:column;gap:2px;min-width:0;box-shadow:0 6px 16px -14px #27304b}
+.g .k{font-family:var(--hand);font-weight:700;font-size:13px;color:var(--muted)}
+.g .v{font-family:var(--display);font-weight:800;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.g .v small{font-size:14px;color:var(--muted);font-weight:700}
+.meter{position:relative;height:12px;border-radius:6px;background:var(--chip);overflow:hidden;margin-top:4px}
+.meter .fill{position:absolute;left:0;top:0;bottom:0;background:var(--air);border-radius:6px;width:0}
+.meter .mark{position:absolute;top:-2px;bottom:-2px;width:3px;background:var(--accent);border-radius:2px}
+.tilt{position:relative;height:12px;border-radius:6px;margin-top:4px;background:linear-gradient(90deg,var(--chip) 0 17%,var(--good) 17% 52%,var(--warn) 52% 69%,var(--bad) 69% 100%)}
+.tilt .needle{position:absolute;top:-4px;width:6px;height:20px;margin-left:-3px;background:var(--outline);border-radius:3px;border:2px solid var(--card);left:0;transition:left .08s}
+
+/* controls */
+.controls{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;align-items:stretch}
+@media (max-width:600px){.controls{grid-template-columns:1fr 1fr}}
+.box{background:var(--card);border-radius:18px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.box label{font-family:var(--hand);font-weight:700;font-size:14px;color:var(--muted);display:flex;justify-content:space-between}
+input[type=range]{width:100%;accent-color:var(--accent);height:34px;margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font-family:var(--display);font-weight:700;font-size:16px;border:0;border-radius:14px;padding:9px 14px;cursor:pointer;background:var(--accent);color:var(--accent-ink);
+  box-shadow:0 4px 0 color-mix(in srgb,var(--accent) 60%,#000);transition:transform .1s,box-shadow .1s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.btn:active,.btn.held{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--accent) 60%,#000)}
+.btn.ghost{background:var(--chip);color:var(--ink);box-shadow:0 4px 0 color-mix(in srgb,var(--chip) 65%,var(--outline))}
+.btn.ghost:active,.btn.ghost.held{box-shadow:0 1px 0 color-mix(in srgb,var(--chip) 65%,var(--outline))}
+.btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.nose{display:grid;grid-template-rows:1fr 1fr;gap:8px;flex:1}
+.nose .btn{font-size:19px;padding:14px 10px;touch-action:none}
+.keys{font-size:13px;color:var(--muted)}
+.keys kbd{font-family:var(--body);font-weight:800;background:var(--chip);border-radius:6px;padding:1px 6px;color:var(--ink)}
+@media (hover:none){.keys{display:none}}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* cards area */
+.card{background:var(--card);border-radius:22px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 30px -18px #27304b55}
+.eyebrow{font-family:var(--hand);font-weight:700;font-size:15px;color:var(--accent)}
+h2{font-family:var(--display);font-weight:800;font-size:clamp(24px,4.5vw,32px);line-height:1.1;margin:0;text-wrap:balance}
+p{margin:0;max-width:64ch}
+.goal{font-family:var(--hand);font-weight:700;background:var(--chip);border-radius:14px;padding:8px 12px}
+.lessons{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.lesson{display:flex;gap:12px;align-items:center;text-align:left;background:var(--chip);border:0;border-radius:16px;padding:12px 14px;cursor:pointer;color:var(--ink);font:inherit;transition:transform .15s}
+.lesson:hover{transform:translateY(-2px)}
+.lesson .n{flex:0 0 auto;width:40px;height:40px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font:800 20px var(--display);display:grid;place-items:center}
+.lesson .t{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.15}
+.lesson .d{font-size:14px;color:var(--muted)}
+.lesson .info{flex:1;min-width:0}
+.stars{display:inline-flex;gap:2px;vertical-align:middle}
+.stars svg{width:16px;height:16px}
+.bigstars svg{width:44px;height:44px}
+.bigstars{display:flex;gap:6px}
+.bigstars svg{animation:pop .5s cubic-bezier(.3,1.8,.5,1) both}
+.bigstars svg:nth-child(2){animation-delay:.15s}.bigstars svg:nth-child(3){animation-delay:.3s}
+@keyframes pop{from{transform:scale(0) rotate(-40deg)}to{transform:none}}
+.learn{border-left:4px solid var(--accent);padding:4px 0 4px 12px}
+.view[hidden]{display:none!important}
+@media (prefers-reduced-motion: reduce){.warn{animation:none}.bigstars svg{animation:none}.lesson{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="title">Katja's Flying Lessons<small>with Captain Anurag</small></h1>
+    <div class="toplinks"><a class="link" href="../">← How planes fly</a><button class="mini" id="soundBtn" aria-pressed="false">Sound: off</button></div>
+  </header>
+
+  <div class="sky" id="sky">
+    <canvas id="cv" aria-label="The sky, with your plane"></canvas>
+    <div class="chipbar" id="chips"></div>
+    <div class="warn" id="warn" hidden></div>
+    <div class="coach hide" id="coach"><div class="who" aria-hidden="true"><svg width="28" height="14" viewBox="0 0 240 110"><path d="M26 64 Q28 38 54 38 L176 38 Q228 40 232 62 Q228 82 184 82 L52 82 Q28 82 26 64 Z M34 58 L16 12 Q14 4 24 6 L64 46 Z" fill="#fff"/></svg></div><div class="bub" id="bub" aria-live="polite"></div></div>
+    <button class="pausebtn" id="pauseBtn" aria-label="Pause" hidden>II</button>
+    <div class="pausecard" id="pauseCard" hidden><div><h3>Paused</h3><div class="row"><button class="btn" id="resumeBtn">Keep flying</button><button class="btn ghost" id="quitBtn">Lessons</button></div></div></div>
+  </div>
+
+  <!-- MENU -->
+  <section class="view card" id="menuView">
+    <div class="eyebrow">pick a lesson</div>
+    <h2>Ready to fly, Captain Katja?</h2>
+    <p>Each lesson teaches one thing from the explainer, and now you do it yourself. Start with lesson 1. You can't break anything, promise.</p>
+    <div class="lessons" id="lessons"></div>
+    <p class="keys">On a computer: <kbd>↑</kbd> <kbd>↓</kbd> nose up/down · <kbd>→</kbd> <kbd>←</kbd> more/less power · <kbd>G</kbd> wheels · <kbd>F</kbd> force arrows · <kbd>P</kbd> pause</p>
+  </section>
+
+  <!-- BRIEF -->
+  <section class="view card" id="briefView" hidden>
+    <div class="eyebrow" id="bEye"></div>
+    <h2 id="bTitle"></h2>
+    <p id="bText"></p>
+    <div class="goal" id="bGoal"></div>
+    <div class="row"><button class="btn" id="goBtn">Let's fly!</button><button class="btn ghost" id="backBtn">Back to lessons</button></div>
+  </section>
+
+  <!-- RESULT -->
+  <section class="view card" id="resultView" hidden>
+    <div class="eyebrow" id="rEye"></div>
+    <h2 id="rTitle"></h2>
+    <div class="bigstars" id="rStars"></div>
+    <p id="rText"></p>
+    <p class="learn" id="rLearn"></p>
+    <div class="row"><button class="btn" id="nextBtn">Next lesson</button><button class="btn ghost" id="retryBtn">Try again</button><button class="btn ghost" id="menuBtn">Lessons</button></div>
+  </section>
+
+  <!-- FLY -->
+  <div class="view" id="flyView" hidden style="display:flex;flex-direction:column;gap:10px">
+    <div class="panel">
+      <div class="g"><span class="k">speed</span><span class="v" id="gSpd">0 <small>km/h</small></span><div class="meter"><div class="fill" id="gSpdBar"></div><div class="mark" style="left:50%" title="250 km/h: lift-off speed"></div></div></div>
+      <div class="g"><span class="k">height</span><span class="v" id="gAlt">0 <small>m</small></span><div class="meter"><div class="fill" id="gAltBar" style="background:var(--sun)"></div></div></div>
+      <div class="g"><span class="k">going</span><span class="v" id="gVs">level</span></div>
+      <div class="g"><span class="k">wing tilt</span><span class="v" id="gAoa">0°</span><div class="tilt"><div class="needle" id="gAoaN"></div></div></div>
+    </div>
+    <div class="controls">
+      <div class="box">
+        <label for="thr"><span>engine power</span><span id="thrTxt">0%</span></label>
+        <input type="range" id="thr" min="0" max="100" value="0">
+        <div class="row">
+          <button class="btn ghost" id="gearBtn" aria-pressed="true">Wheels: down</button>
+          <button class="btn ghost" id="forceBtn" aria-pressed="true">Force arrows</button>
+        </div>
+      </div>
+      <div class="box nose">
+        <button class="btn" id="upBtn">Nose up ▲</button>
+        <button class="btn" id="downBtn">Nose down ▼</button>
+      </div>
+    </div>
+    <p class="keys"><kbd>↑</kbd> <kbd>↓</kbd> nose · <kbd>→</kbd> <kbd>←</kbd> power · <kbd>G</kbd> wheels · <kbd>F</kbd> force arrows · <kbd>P</kbd> pause</p>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const G = 9.81, CQ = 0.00222, TMAX = 3.2, TS = 1.6, STALL = 15;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = seed => { let x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* ---------- storage (best stars) ---------- */
+let best = {};
+try { best = JSON.parse(localStorage.getItem('katjaFly') || '{}') || {}; } catch (e) { best = {}; }
+const saveBest = () => { try { localStorage.setItem('katjaFly', JSON.stringify(best)); } catch (e) {} };
+
+/* ---------- colors from theme tokens ---------- */
+let col = {};
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  ['--sky1','--sky2','--skyhi','--ink','--muted','--card','--accent','--accent-soft','--sun','--cloud','--plane','--wing','--outline','--window','--blush','--air','--ground','--ground2','--hill','--runway','--dash','--good','--warn','--bad']
+    .forEach(k => col[k.slice(2)] = cs.getPropertyValue(k).trim());
+  col.dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light' || document.documentElement.dataset.theme === 'dark';
+  buildPlanes();
+}
+
+/* ---------- plane sprites (same character as the explainer) ---------- */
+const planeImg = {};
+function planeSVG(gear, blink) {
+  const c = col;
+  const eye = blink ? `<path d="M197 54 Q203 57 209 54" fill="none" stroke="${c.outline}" stroke-width="3" stroke-linecap="round"/>`
+    : `<ellipse cx="203" cy="53" rx="6.5" ry="7.5" fill="${c.outline}"/><circle cx="205.5" cy="50" r="2.2" fill="#fff"/>`;
+  const wheels = gear ? `<g stroke="${c.outline}" stroke-width="3"><line x1="120" y1="84" x2="120" y2="96"/><line x1="196" y1="80" x2="196" y2="96"/></g><circle cx="120" cy="99" r="7" fill="${c.outline}"/><circle cx="196" cy="99" r="7" fill="${c.outline}"/>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 110" width="480" height="220">${wheels}
+  <path d="M34 58 L16 12 Q14 4 24 6 L64 46 Z" fill="${c.accent}" stroke="${c.outline}" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M26 64 Q28 38 54 38 L176 38 Q228 40 232 62 Q228 82 184 82 L52 82 Q28 82 26 64 Z" fill="${c.plane}" stroke="${c.outline}" stroke-width="3"/>
+  <path d="M40 70 L200 70" stroke="${c.accent}" stroke-width="5" stroke-linecap="round"/>
+  <g fill="${c.window}"><circle cx="72" cy="55" r="4.5"/><circle cx="88" cy="55" r="4.5"/><circle cx="104" cy="55" r="4.5"/><circle cx="120" cy="55" r="4.5"/><circle cx="136" cy="55" r="4.5"/><circle cx="152" cy="55" r="4.5"/></g>
+  ${eye}<ellipse cx="214" cy="66" rx="6" ry="3.5" fill="${c.blush}"/>
+  <path d="M197 66 Q203 72 209 67" fill="none" stroke="${c.outline}" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M92 66 L142 66 L116 100 Q112 106 104 104 Z" fill="${c.wing}" stroke="${c.outline}" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="112" y="82" width="34" height="15" rx="7.5" fill="${c.wing}" stroke="${c.outline}" stroke-width="3"/></svg>`;
+}
+function buildPlanes() {
+  for (const gear of [0, 1]) for (const blink of [0, 1]) {
+    const im = new Image(); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planeSVG(gear, blink));
+    planeImg[gear + '' + blink] = im;
+  }
+}
+const PIVOT = { x: 120, y: 106 }; // main wheels touch point in sprite units
+
+/* ---------- canvas ---------- */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let W = 800, H = 450, K = 1, DPR = 1;
+function resize() {
+  const r = cv.getBoundingClientRect(); DPR = Math.min(2, devicePixelRatio || 1);
+  W = Math.max(200, r.width); H = Math.max(150, r.height);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  K = Math.max(0.62, Math.min(W / 800, H / 450));
+}
+new ResizeObserver(resize).observe($('#sky'));
+
+/* ---------- sound (optional, after a tap) ---------- */
+let AC = null, eng = null, beepT = 0, soundOn = false;
+function initSound() {
+  if (AC) return; try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
+    o.type = 'sawtooth'; o2.type = 'triangle'; f.type = 'lowpass'; f.frequency.value = 500; g.gain.value = 0;
+    o.connect(f); o2.connect(f); f.connect(g); g.connect(AC.destination); o.start(); o2.start();
+    eng = { o, o2, f, g };
+  } catch (e) { AC = null; }
+}
+function beep(freq, dur, vol = 0.06) {
+  if (!AC || !soundOn) return;
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = 'square'; o.frequency.value = freq; g.gain.value = vol;
+  o.connect(g); g.connect(AC.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur); o.stop(AC.currentTime + dur + 0.02);
+}
+$('#soundBtn').onclick = () => {
+  initSound(); soundOn = !soundOn; if (AC && AC.state === 'suspended') AC.resume();
+  $('#soundBtn').setAttribute('aria-pressed', soundOn); $('#soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
+};
+
+/* ---------- missions ---------- */
+const kmh = s => Math.hypot(s.vx, s.vy) * 3.6;
+function trim(v) { const cl = G / (CQ * v * v); return clamp((cl - 0.25) / 0.08, -4, 14); }
+function dragAt(v) { const cl = G / (CQ * v * v); return CQ * v * v * (0.03 + 0.045 * cl * cl); }
+
+const MISSIONS = [
+  { id: 'takeoff', n: 1, title: 'Take off', short: 'Race down the runway and lift off',
+    brief: "You're at the start of the runway. Push the engine power all the way up and race down the runway. At about 250 km/h, gently lift the nose and the wings will carry you up.",
+    goal: 'Goal: climb to 150 m. Tip: lift the nose gently (about 10°), or the tail scrapes the runway!',
+    learn: 'Wings need speed to make lift. Around 250 km/h they can carry the whole plane, and then you just lift the nose.',
+    runways: [{ x0: 0, x1: 3200 }],
+    start: { x: 120, y: 0, v: 0, thr: 0, gear: true, ground: true },
+    chips: s => [`Height ${Math.max(0, s.y).toFixed(0)} / 150 m`],
+    check(s) {
+      if (s.ground && s.th > 14.5) return { fail: 'Scrrrape! The tail touched the runway. Lift the nose more gently, about 10° is plenty.' };
+      if (s.ground && s.x > 3200) return { fail: 'Ran out of runway! Use full power, and lift the nose once you pass 250 km/h.' };
+      if (s.y >= 150) return { win: 1 + (!s.gear ? 1 : 0) + (!s.everStalled ? 1 : 0), note: (s.gear ? 'Extra star next time: tuck the wheels in after take-off. ' : '') + (s.everStalled ? 'Extra star: climb without stalling.' : '') };
+    },
+    coach(s) {
+      const v = kmh(s);
+      if (s.ground && s.thr < 0.95) return 'Push the <b>engine power</b> all the way up! (slider, or the → key)';
+      if (s.ground && v < 180) return 'Faster, faster... the wings need <b>speed</b> to make lift.';
+      if (s.ground && v < 240) return 'Almost there... get ready to lift the nose.';
+      if (s.ground && s.th > 11) return 'Not too much! Let go of <b>Nose up</b>, or the tail scrapes the runway.';
+      if (s.ground) return 'Now! Hold <b>Nose up</b> gently until the wing tilt is about 10°.';
+      if (s.gear) return "We're flying! Tuck the <b>wheels</b> in, they slow us down.";
+      return 'Beautiful. Keep climbing to <b>150 m</b>!';
+    } },
+  { id: 'rings', n: 2, title: 'Fly through the rings', short: 'Steer with small nose movements',
+    brief: "We're cruising at 300 m. Fly through the golden rings. Nose up a little to climb, nose down a little to descend. Small, gentle movements work best. If you slow down, add power.",
+    goal: 'Goal: fly through at least 3 of the 5 rings.',
+    learn: 'Nose up = climb, nose down = descend, and the engine power keeps your speed. Small movements make smooth flying.',
+    runways: [],
+    start: { x: 0, y: 300, v: 300 / 3.6, gear: false },
+    setup(s) { s.rings = [[1300, 300], [2500, 430], [3700, 360], [4900, 210], [6100, 330]].map(([x, y]) => ({ x, y, r: 42, hit: null })); },
+    chips: s => [`Rings ${s.ringsHit} / 5`],
+    check(s) {
+      const last = s.rings[s.rings.length - 1];
+      if (s.x > last.x + 250) return s.ringsHit >= 3 ? { win: s.ringsHit >= 5 ? 3 : s.ringsHit >= 4 ? 2 : 1, note: s.ringsHit < 5 ? `You got ${s.ringsHit} of 5. Get all 5 for three stars!` : 'All five rings!' } : { fail: `Only ${s.ringsHit} ring${s.ringsHit === 1 ? '' : 's'}. Try smaller nose movements, and start climbing or descending a bit earlier.` };
+    },
+    coach(s) {
+      const v = kmh(s), nxt = s.rings.find(r => r.hit === null);
+      if (v < 230) return "We're getting slow! Add some <b>power</b>.";
+      if (v > 480) return 'Woah, speedy! Take some <b>power</b> away.';
+      if (!nxt) return 'Nice flying!';
+      const d = nxt.y - s.y;
+      if (d > 25) return 'The next ring is <b>higher</b>. A little nose up.';
+      if (d < -25) return 'The next ring is <b>lower</b>. A little nose down.';
+      return "Lined up! Keep it steady, don't overdo it.";
+    } },
+  { id: 'stall', n: 3, title: 'Make it stall (on purpose!)', short: 'See a stall, then fix it',
+    brief: 'Real pilots practise this. Take the power all the way off, then slowly keep lifting the nose. Watch the wing-tilt meter go yellow, then red. When the plane stalls, fix it: nose down, power up.',
+    goal: 'Goal: make the plane stall, then recover to normal flight.',
+    learn: 'A stall happens when the wing is tilted too much and the air stops following it. The fix is always the same: nose down, power up.',
+    runways: [],
+    start: { x: 0, y: 700, v: 300 / 3.6, gear: false },
+    setup(s) { s.phase = 'pull'; },
+    chips: s => [s.phase === 'pull' ? 'Step 1: make it stall' : 'Step 2: recover!'],
+    check(s) {
+      if (s.phase === 'pull' && s.stalled && kmh(s) < 260) { s.phase = 'recover'; s.stallAlt = s.y; s.minAlt = s.y; s.stallT = s.t; }
+      if (s.phase === 'recover') {
+        s.minAlt = Math.min(s.minAlt, s.y);
+        if (s.t - s.stallT > 2 && !s.stalled && s.alpha < 10 && kmh(s) > 230 && s.vy > -3) {
+          const lost = s.stallAlt - s.minAlt;
+          return { win: lost < 180 ? 3 : lost < 320 ? 2 : 1, note: `You lost ${Math.round(lost)} m of height while recovering.` + (lost >= 180 ? ' Push the nose down sooner for three stars.' : '') };
+        }
+      }
+    },
+    coach(s) {
+      if (s.phase === 'pull') {
+        if (s.thr > 0.05) return 'First, take the <b>power</b> all the way off (← key or slider).';
+        if (s.alpha < 8) return 'Now keep lifting the <b>nose</b>... slowly...';
+        if (s.alpha < 13) return 'Keep pulling... watch the <b>wing tilt</b> meter go yellow.';
+        return 'Almost... the wing is about to give up...';
+      }
+      if (s.stalled) return 'STALL! The air stopped following the wing. <b>Nose down</b> and <b>power up</b>!';
+      if (kmh(s) < 230) return 'Good, the wing is working again. Keep the nose down a bit until we have speed.';
+      return 'Now gently level out. Nose up just a little.';
+    } },
+  { id: 'glide', n: 4, title: 'Engines off!', short: 'Glide to the runway without engines',
+    brief: "Both engines stopped (don't worry, only in this game). You're 800 m up and the runway is 7.5 km away. Keep your speed around 250 km/h for a long, calm glide. Wheels down before you land!",
+    goal: 'Goal: glide all the way and land gently on the runway.',
+    learn: "No engines doesn't mean falling. The wings keep working as long as you keep moving, so the plane glides a long way.",
+    runways: [{ x0: 7500, x1: 11000 }],
+    start: { x: 0, y: 800, v: 250 / 3.6, gear: false, engineOut: true },
+    chips: s => [`Runway in ${Math.max(0, (7500 - s.x) / 1000).toFixed(1)} km`, 'Engines off'],
+    check: landCheck,
+    coach(s) {
+      const v = kmh(s), dist = 7500 - s.x;
+      if (s.ground) return s.landed ? 'You did it! Hold on while the brakes stop us...' : '';
+      if (dist > 0 && s.y > 0) {
+        const need = dist / Math.max(1, s.y);
+        if (need > 12) return 'Hmm, the runway is far. Keep about <b>240 km/h</b>, that glides the furthest.';
+        if (need < 6 && s.y > 150) return "We're quite high! <b>Nose down</b> a bit more, we can come down faster.";
+        if (v > 320 && need > 8) return "Too fast, you're using up height. <b>Nose up</b> a little.";
+        if (v < 215) return 'Too slow! <b>Nose down</b> a little, keep about 250 km/h.';
+      }
+      if (s.gear === false && (dist < 3500 || s.y < 250)) return 'Time for the <b>wheels</b>! (Wheels button or G)';
+      if (dist <= 0 && s.y < 60) return 'Nearly down! <b>Nose up</b> just a tiny bit for a soft touchdown.';
+      if (dist <= 0) return "We're over the runway. Keep coming down gently.";
+      return 'Shhh... gliding. Keep about <b>250 km/h</b>.';
+    } },
+  { id: 'land', n: 5, title: 'Land the plane', short: 'Wheels down, slow down, touch down',
+    brief: "Time to bring her home. You're 450 m up and the runway is 6 km ahead. Take some power off, put the wheels down and aim for the start of the runway. On the runway, take the power to zero and the brakes do the rest.",
+    goal: 'Goal: land gently and stop on the runway.',
+    learn: 'Landing means slowing down, wheels down, aiming for the runway, and lifting the nose a tiny bit just before touchdown.',
+    runways: [{ x0: 6000, x1: 8800 }],
+    start: { x: 0, y: 450, v: 300 / 3.6, gear: false },
+    chips: s => [`Runway in ${Math.max(0, (6000 - s.x) / 1000).toFixed(1)} km`],
+    check: landCheck,
+    coach(s) {
+      const v = kmh(s), dist = 6000 - s.x;
+      if (s.ground) return s.thr > 0.05 ? 'On the ground! Take the <b>power</b> to zero so the brakes work.' : 'Braking... nice and calm.';
+      if (!s.gear && dist < 4500) return 'Put the <b>wheels</b> down! (Wheels button or G)';
+      if (v > 310 && dist < 4000) return 'A bit fast for landing. Take some <b>power</b> off.';
+      if (v < 215) return "Careful, we're slow! A little <b>power</b>, or nose down a bit.";
+      if (dist > 0) {
+        const want = dist * 0.075;
+        if (s.y > want + 80) return "We're too high. <b>Nose down</b> a little and keep the power low.";
+        if (s.y < want - 80) return "We're a bit low. Add a touch of <b>power</b> and level off.";
+        return 'Perfect approach. Aim for the start of the runway, about <b>250 km/h</b>.';
+      }
+      if (s.y < 50) return 'Almost down... <b>nose up</b> a tiny bit for a soft touchdown.';
+      return 'Over the runway! Gently down...';
+    } },
+  { id: 'free', n: 6, title: 'Free flight', short: 'No rules. Just fly.',
+    brief: 'No goals, no rules. Take off, chase rings, fly up high, try to land on the next runway. Have fun, Captain Katja!',
+    goal: 'Rings appear ahead of you. There is a runway every 20 km.',
+    learn: '',
+    runways: [{ x0: 0, x1: 3200 }],
+    start: { x: 120, y: 0, v: 0, thr: 0, gear: true, ground: true },
+    setup(s) { s.rings = []; s.free = true; },
+    chips: s => [`${(s.x / 1000).toFixed(1)} km flown`, `${s.ringsHit} rings`],
+    check(s) {
+      const last = s.rings.length ? s.rings[s.rings.length - 1].x : 2500;
+      if (s.x > last - 4000) s.rings.push({ x: last + 1100 + Math.random() * 600, y: 140 + Math.random() * 520, r: 42, hit: null });
+      if (s.rings.length > 40) s.rings.splice(0, 10);
+      const ri = Math.floor(s.x / 20000) + 1, x0 = ri * 20000;
+      if (!world.runways.some(r => r.x0 === x0)) world.runways.push({ x0, x1: x0 + 2800 });
+      if (s.landed && s.ground && kmh(s) < 20) { s.landed = false; flash('Landed! Push power to take off again.'); }
+    },
+    coach(s) {
+      if (s.ground && kmh(s) < 50 && s.thr < 0.9) return 'Power up whenever you\'re ready!';
+      if (s.ground && kmh(s) > 240) return '<b>Nose up</b>!';
+      if (s.gear && s.y > 80) return 'Wheels up for more speed? (G)';
+      return '';
+    } }
+];
+
+function landCheck(s) {
+  const rw = world.runways[0];
+  if (s.ground && s.x > rw.x1 && kmh(s) > 15) return { fail: 'We rolled off the end of the runway! Touch down nearer the start, and take the power to zero right after landing.' };
+  if (s.landed && s.ground && kmh(s) < 10) {
+    const vs = -s.touchVs;
+    return { win: vs < 1.8 ? 3 : vs < 3.2 ? 2 : 1, note: `Touchdown at ${(vs).toFixed(1)} m/s down. ` + (vs < 1.8 ? 'Butter-smooth!' : vs < 3.2 ? 'Nice and firm. For three stars, lift the nose a tiny bit right before touchdown.' : 'A bit bumpy! Come in slower and lift the nose a tiny bit just before touching down.') };
+  }
+}
+
+/* ---------- state ---------- */
+let world = { runways: [] };
+let S = null, mission = null, mode = 'menu', paused = false;
+let input = { up: false, down: false, thrUp: false, thrDown: false };
+let forcesOn = true, particles = [], shake = 0, blinkT = 0, puffT = 0, failTimer = 0, flashMsg = '', flashT = 0;
+
+function newState(st) {
+  const v = st.v || 0;
+  const s = { x: st.x, y: st.y, vx: v, vy: 0, th: 0, prate: 0, thr: st.thr ?? 0, gear: !!st.gear, ground: !!st.ground,
+    engineOut: !!st.engineOut, stalled: false, everStalled: false, alpha: 0, rings: [], ringsHit: 0, landed: false, touchVs: 0,
+    t: 0, done: false, crashed: false, aT: 0, F: { L: 0, D: 0, T: 0, gam: 0 } };
+  if (v > 0) { s.th = s.aT = trim(v); if (st.thr === undefined) s.thr = s.engineOut ? 0 : clamp(dragAt(v) / TMAX, 0, 1); }
+  return s;
+}
+function startMission(m) {
+  mission = m; world = { runways: m.runways.map(r => ({ ...r })) };
+  S = newState(m.start); if (m.setup) m.setup(S);
+  particles = []; failTimer = 0; paused = false; flashMsg = '';
+  $('#thr').value = Math.round(S.thr * 100); $('#thr').disabled = S.engineOut;
+  syncButtons(); setMode('fly');
+}
+function attract() {
+  mission = null; world = { runways: [{ x0: 0, x1: 3200 }] };
+  S = newState({ x: -2500, y: 260, v: 290 / 3.6, gear: false }); S.auto = true;
+}
+
+/* ---------- physics ---------- */
+function CL(a) { return a <= STALL ? 0.25 + 0.08 * a : Math.max(0.45, 1.45 - 0.12 * (a - STALL)); }
+function step(s, dt) {
+  const V = Math.hypot(s.vx, s.vy);
+  const gam = V > 3 ? Math.atan2(s.vy, s.vx) : 0;
+  const a = V > 3 ? s.th - gam * R2D : s.th;
+  s.alpha = a;
+  const stall = a > STALL && !s.ground && V > 3;
+  if (stall && !s.stalled) { s.everStalled = true; beep(520, 0.15); }
+  s.stalled = stall;
+  const cl = CL(a), q = CQ * V * V;
+  const L = q * cl, D = q * (0.03 + 0.045 * cl * cl + (s.gear ? 0.015 : 0) + (stall ? 0.08 : 0));
+  const T = s.engineOut ? 0 : TMAX * s.thr;
+  const th = s.th * D2R;
+  let ax = -L * Math.sin(gam) - D * Math.cos(gam) + T * Math.cos(th);
+  let ay = L * Math.cos(gam) - D * Math.sin(gam) + T * Math.sin(th) - G;
+  if (s.ground) {
+    if (ay <= 0) { const N = -ay; ay = 0; const mu = s.thr < 0.05 ? 0.45 : 0.02; if (s.vx > 0) ax -= mu * N; }
+    else s.ground = false;
+  }
+  s.vx += ax * dt; s.vy += ay * dt;
+  if (s.ground) { s.vy = 0; if (s.vx < 0) s.vx = 0; }
+  s.x += s.vx * dt; s.y += s.vy * dt;
+  s.F = { L, D, T, gam };
+
+  // pitch: the stick sets how much the wing is tilted into the air (angle of attack), like a real elevator.
+  // The plane holds that tilt when you let go. A stalled wing drops the nose by itself.
+  let inp = (input.up ? 1 : 0) - (input.down ? 1 : 0);
+  if (s.auto) { const want = clamp((260 + 60 * Math.sin(s.t / 7) - s.y) * 0.1, -5, 5); s.aT = clamp(trim(V) + (want - s.vy) * 0.8, -2, 11); inp = 0; }
+  s.aT = clamp(s.aT + inp * 7 * dt, s.ground ? 0 : -6, 20);
+  const maxRate = clamp(1.6 * G / Math.max(V, 1) * R2D, 7, 20); // the wing can only bend the path so fast (~2.5 g)
+  const wantRate = clamp((s.aT - a) * 3, -maxRate, maxRate);
+  s.prate += (wantRate - s.prate) * Math.min(1, dt * 8);
+  s.th += s.prate * dt;
+  if (stall) s.th -= (7 + (a - STALL) * 2.5) * dt;
+  s.th = s.ground ? clamp(s.th, 0, 16) : clamp(s.th, -30, 35);
+
+  if (!s.ground && s.y <= 0) touchdown(s);
+  s.t += dt;
+}
+function onRunway(x) { return world.runways.some(r => x >= r.x0 && x <= r.x1); }
+function touchdown(s) {
+  const vs = s.vy, V = Math.hypot(s.vx, s.vy);
+  s.y = 0;
+  if (s.auto) { s.vy = 0; s.ground = true; return; }
+  if (!onRunway(s.x)) {
+    if (vs > -3 && V < 85 && s.gear) return crash(s, "You landed in a field! The cows say hi, but planes like runways better.", false);
+    return crash(s, 'Bonk! The plane bumped into the ground. Keep an eye on your height and speed.');
+  }
+  if (!s.gear) return crash(s, 'Belly landing! We forgot the wheels. Press the Wheels button (or G) before landing.');
+  if (vs < -6.5) return crash(s, 'Bonk, way too hard! Come in slower and flatter, and lift the nose a tiny bit right before touchdown.');
+  if (s.th < -4) return crash(s, 'Nose wheel first! Lift the nose a tiny bit just before you touch down.');
+  s.ground = true; s.vy = 0; s.th = Math.max(0, s.th); s.landed = true; s.touchVs = vs;
+  for (let i = 0; i < 10; i++) particles.push({ x: s.x - 5 + Math.random() * 10, y: 1, vx: -10 - Math.random() * 20, vy: 3 + Math.random() * 4, r: 4, life: 0, max: 1 + Math.random() * .5, kind: 'dust' });
+  beep(180, 0.1, 0.08);
+}
+function crash(s, msg, poof = true) {
+  s.crashed = true; s.done = true; s.vx = 0; s.vy = 0; s.ground = true;
+  if (poof) { shake = 1; for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, sp = 10 + Math.random() * 30; particles.push({ x: s.x, y: 8, vx: Math.cos(a) * sp, vy: Math.abs(Math.sin(a)) * sp, r: 8, life: 0, max: 1.4 + Math.random(), kind: 'poof' }); } beep(110, 0.35, 0.1); }
+  failTimer = 1.1; pendingResult = { fail: msg };
+}
+let pendingResult = null;
+
+/* ---------- rings ---------- */
+function ringPass(s, px) {
+  for (const r of s.rings) {
+    if (r.hit !== null) continue;
+    if (px < r.x && s.x >= r.x) {
+      r.hit = Math.abs(s.y - r.y) < r.r * 0.9;
+      if (r.hit) { s.ringsHit++; beep(880, 0.12); setTimeout(() => beep(1320, 0.15), 90); for (let i = 0; i < 9; i++) particles.push({ x: r.x, y: r.y, vx: (Math.random() - .5) * 60, vy: (Math.random() - .3) * 60, r: 6, life: 0, max: 1.1, kind: 'heart' }); }
+    }
+  }
+}
+
+/* ---------- rendering ---------- */
+function cloudShape(x, y, w, alpha) {
+  ctx.globalAlpha = alpha; ctx.fillStyle = col.cloud;
+  ctx.beginPath();
+  const h = w * 0.42;
+  ctx.ellipse(x, y, w * 0.5, h * 0.42, 0, 0, Math.PI * 2);
+  ctx.ellipse(x - w * 0.22, y - h * 0.15, w * 0.24, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + w * 0.05, y - h * 0.38, w * 0.26, h * 0.62, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + w * 0.27, y - h * 0.1, w * 0.2, h * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill(); ctx.globalAlpha = 1;
+}
+function heartPath(x, y, r) {
+  ctx.beginPath(); ctx.moveTo(x, y + r * 0.9);
+  ctx.bezierCurveTo(x - r * 1.4, y - r * 0.1, x - r * 0.6, y - r * 1.2, x, y - r * 0.35);
+  ctx.bezierCurveTo(x + r * 0.6, y - r * 1.2, x + r * 1.4, y - r * 0.1, x, y + r * 0.9); ctx.fill();
+}
+function arrow(x, y, dx, dy, color, label) {
+  const len = Math.hypot(dx, dy); if (len < 6) return;
+  const ux = dx / len, uy = dy / len;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 5 * K; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx - ux * 8 * K, y + dy - uy * 8 * K); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + dx, y + dy); ctx.lineTo(x + dx - ux * 14 * K - uy * 8 * K, y + dy - uy * 14 * K + ux * 8 * K); ctx.lineTo(x + dx - ux * 14 * K + uy * 8 * K, y + dy - uy * 14 * K - ux * 8 * K); ctx.closePath(); ctx.fill();
+  if (label) { ctx.font = `700 ${Math.round(13 * K + 3)}px "Shantell Sans", cursive`; ctx.fillStyle = col.ink; ctx.textAlign = 'center'; ctx.fillText(label, x + dx + ux * (Math.abs(ux) > 0.7 ? 30 : 16) * K, y + dy + uy * 16 * K + 4); }
+}
+
+function render(dt) {
+  const s = S; const sc = 0.8 * K;          // pixels per metre
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  let shx = 0, shy = 0;
+  if (!reduce && (shake > 0 || s.stalled)) { const m = (s.stalled ? 2.5 : 0) + shake * 10; shx = (Math.random() - .5) * m; shy = (Math.random() - .5) * m; }
+  shake = Math.max(0, shake - dt * 2);
+  ctx.translate(shx, shy);
+  const camY = Math.max(s.y, (H * 0.5 - 34) / sc), camX = s.x;
+  const PX = W * 0.32;
+  const sx = (x, p = 1) => PX + (x - camX * p) * sc;
+  const sy = (y, p = 1) => H * 0.5 - (y - camY * p) * sc;
+  const gY = sy(0);
+
+  // sky gets deeper blue the higher you go
+  const hi = clamp(camY / 1600, 0, 1);
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, hi > 0 ? mix(col.sky1, col.skyhi, hi) : col.sky1); grd.addColorStop(1, mix(col.sky2, col.sky1, hi * 0.7));
+  ctx.fillStyle = grd; ctx.fillRect(-20, -20, W + 40, H + 40);
+  if (col.dark) { ctx.fillStyle = '#ffffff'; for (let i = 0; i < 60; i++) { const x = ((rnd(i) * 1.3 * W - camX * 0.01 * sc) % (W + 20) + W + 20) % (W + 20); ctx.globalAlpha = 0.3 + rnd(i + 9) * 0.6; ctx.fillRect(x, rnd(i + 3) * H * 0.8, 2, 2); } ctx.globalAlpha = 1; }
+  // sun / moon
+  ctx.fillStyle = col.sun; ctx.beginPath(); ctx.arc(W * 0.84, H * 0.17 + (gY > H ? 0 : 0), 30 * K, 0, Math.PI * 2); ctx.fill();
+
+  // far clouds
+  drawCloudLayer(0.18, 0.35, 500, 0.55, 70, sc, PX, camX, camY);
+  drawCloudLayer(0.5, 0.6, 700, 0.75, 110, sc, PX, camX, camY);
+
+  // hills (only near the ground)
+  if (gY < H + 200 * K) {
+    hills(0.25, col.hill, 90 * K, 0.004, gY, camX, sc, 1);
+    hills(0.55, col.ground2, 55 * K, 0.007, gY, camX, sc, 2);
+    ctx.fillStyle = col.ground; ctx.fillRect(-20, gY, W + 40, H - gY + 40);
+    // trees
+    const x0 = camX - PX / sc - 60, x1 = camX + (W - PX) / sc + 60;
+    for (let c = Math.floor(x0 / 45); c <= Math.floor(x1 / 45); c++) {
+      if (rnd(c * 3.1) < 0.55) continue;
+      const tx = c * 45 + rnd(c) * 30; if (world.runways.some(r => tx > r.x0 - 250 && tx < r.x1 + 80)) continue;
+      const h = (16 + rnd(c * 7) * 14) * K, X = sx(tx);
+      ctx.fillStyle = col.outline; ctx.fillRect(X - 1.5 * K, gY - h, 3 * K, h);
+      ctx.fillStyle = col.ground2; ctx.beginPath(); ctx.arc(X, gY - h, h * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = col.outline; ctx.lineWidth = 1.5 * K; ctx.stroke();
+    }
+    // runways
+    for (const r of world.runways) {
+      const a = sx(r.x0), b = sx(r.x1); if (b < -50 || a > W + 50) continue;
+      ctx.fillStyle = col.runway; ctx.fillRect(a, gY - 2, b - a, 10 * K + 2);
+      ctx.fillStyle = col.dash;
+      for (let x = r.x0 + 60; x < r.x1 - 60; x += 70) { const X = sx(x); if (X > -40 && X < W + 40) ctx.fillRect(X, gY + 3 * K, 34 * sc, 2.5 * K); }
+      for (let i = 0; i < 4; i++) ctx.fillRect(a + (4 + i * 6) * K, gY + 1, 3 * K, 7 * K);
+      // tower + windsock
+      const T = sx(r.x0 - 140);
+      ctx.fillStyle = col.wing; ctx.strokeStyle = col.outline; ctx.lineWidth = 2 * K;
+      ctx.fillRect(T - 5 * K, gY - 46 * K, 10 * K, 46 * K); ctx.strokeRect(T - 5 * K, gY - 46 * K, 10 * K, 46 * K);
+      ctx.fillStyle = col.window; ctx.fillRect(T - 11 * K, gY - 58 * K, 22 * K, 13 * K); ctx.strokeRect(T - 11 * K, gY - 58 * K, 22 * K, 13 * K);
+      const ws = sx(r.x0 - 60); ctx.strokeStyle = col.outline; ctx.beginPath(); ctx.moveTo(ws, gY); ctx.lineTo(ws, gY - 26 * K); ctx.stroke();
+      ctx.fillStyle = col.accent; ctx.beginPath(); ctx.moveTo(ws, gY - 26 * K); ctx.lineTo(ws - 16 * K, gY - 23 * K + Math.sin(s.t * 6) * 1.5); ctx.lineTo(ws, gY - 18 * K); ctx.fill();
+      // approach marker: where to aim
+      if (mission && (mission.id === 'land' || mission.id === 'glide') && !s.ground) { ctx.fillStyle = col.accent; ctx.font = `700 ${Math.round(12 * K + 3)}px "Shantell Sans", cursive`; ctx.textAlign = 'center'; ctx.fillText('land here ↓', a + 40 * K, gY - 14 * K); }
+    }
+  }
+
+  // rings: back half
+  for (const r of s.rings) ringDraw(r, sx, sy, sc, 'back');
+  // particles behind plane
+  for (const p of particles) drawParticle(p, sx, sy, sc);
+
+  // plane
+  const px = sx(s.x), py = sy(s.y);
+  const pw = 120 * K, ps = pw / 240;
+  blinkT += dt; const blink = (blinkT % 4.2) > 4.05 ? 1 : 0;
+  const img = planeImg[(s.gear ? 1 : 0) + '' + blink];
+  if (img && img.complete && !(s.crashed && failTimer < 0.6)) {
+    ctx.save(); ctx.translate(px, py); ctx.rotate(-s.th * D2R);
+    ctx.drawImage(img, -PIVOT.x * ps, -PIVOT.y * ps, 240 * ps, 110 * ps);
+    ctx.restore();
+  }
+  // engine puffs
+  puffT += dt;
+  const pp = !s.engineOut && s.thr > 0.05 && !s.crashed;
+  if (pp && puffT > 0.06) {
+    puffT = 0; const ex = -10 * ps, ey = -16 * ps, c = Math.cos(-s.th * D2R), sn = Math.sin(-s.th * D2R);
+    const X = px + ex * c - ey * sn, Y = py + ex * sn + ey * c;
+    particles.push({ x: s.x + (X - px) / sc, y: s.y - (Y - py) / sc, vx: s.vx * 0.3, vy: 0, r: 3 + s.thr * 3, life: 0, max: 0.6 + s.thr * 0.9, kind: 'puff' });
+  }
+
+  // rings: front half
+  for (const r of s.rings) ringDraw(r, sx, sy, sc, 'front');
+
+  // near clouds pass in front
+  drawCloudLayer(1.25, 1.1, 900, 0.6, 180, sc, PX, camX, camY);
+
+  // force arrows
+  if (forcesOn && mode === 'fly' && !s.crashed) {
+    const c = Math.cos(-s.th * D2R), sn = Math.sin(-s.th * D2R);
+    const ox = 8 * ps, oy = -46 * ps; const cx = px + ox * c - oy * sn, cy = py + ox * sn + oy * c;
+    const F = s.F, k1 = 7 * K, k2 = 55 * K; // thrust & drag drawn bigger so they're readable
+    arrow(cx, cy, -Math.sin(F.gam) * F.L * k1, -Math.cos(F.gam) * F.L * k1, col.accent, 'lift');
+    arrow(cx, cy + 4 * K, 0, G * k1, col.muted, 'weight');
+    if (F.T > 0.05) arrow(cx, cy, Math.cos(s.th * D2R) * F.T * k2, -Math.sin(s.th * D2R) * F.T * k2, col.sun, 'thrust');
+    arrow(cx, cy, -Math.cos(F.gam) * F.D * k2, Math.sin(F.gam) * F.D * k2, col.air, 'drag');
+  }
+  if (flashT > 0) { flashT -= dt; ctx.font = `700 ${Math.round(18 * K + 4)}px "Shantell Sans", cursive`; ctx.textAlign = 'center'; ctx.fillStyle = col.accent; ctx.fillText(flashMsg, W / 2, H * 0.3); }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+function flash(m) { flashMsg = m; flashT = 3; }
+
+function drawCloudLayer(p, pv, chunk, alpha, size, sc, PX, camX, camY) {
+  const left = camX * p - PX / sc - size * 2, right = camX * p + (W - PX) / sc + size * 2;
+  for (let c = Math.floor(left / chunk); c <= Math.floor(right / chunk); c++) {
+    const seed = c * 13.7 + p * 100;
+    if (rnd(seed) < 0.12) continue;
+    const cx = c * chunk + rnd(seed + 1) * chunk * 0.7, alt = 120 + rnd(seed + 2) * 1100, w = (0.7 + rnd(seed + 3) * 0.7) * size * K;
+    const X = PX + (cx - camX * p) * sc, Y = H * 0.5 - (alt - camY * pv) * sc;
+    if (Y < -80 || Y > H + 80) continue;
+    cloudShape(X, Y, w, alpha);
+  }
+}
+function hills(p, color, amp, freq, gY, camX, sc, seed) {
+  ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(-20, gY + 2);
+  for (let X = -20; X <= W + 20; X += 12) {
+    const wx = (X - W * 0.32) / sc + camX * p;
+    const h = amp * (0.55 + 0.25 * Math.sin(wx * freq + seed) + 0.2 * Math.sin(wx * freq * 2.3 + seed * 3));
+    ctx.lineTo(X, gY - h);
+  }
+  ctx.lineTo(W + 20, gY + 2); ctx.closePath(); ctx.fill();
+}
+function ringDraw(r, sx, sy, sc, half) {
+  const X = sx(r.x), Y = sy(r.y); if (X < -100 || X > W + 100) return;
+  const rx = r.r * 0.3 * sc, ry = r.r * sc;
+  const c = r.hit === true ? col.good : r.hit === false ? col.muted : col.sun;
+  ctx.globalAlpha = r.hit === false ? 0.35 : 1;
+  ctx.lineWidth = 7 * K; ctx.strokeStyle = col.outline;
+  const a0 = half === 'back' ? Math.PI / 2 : -Math.PI / 2, a1 = a0 + Math.PI;
+  ctx.beginPath(); ctx.ellipse(X, Y, rx, ry, 0, a0, a1); ctx.stroke();
+  ctx.lineWidth = 4 * K; ctx.strokeStyle = c; ctx.beginPath(); ctx.ellipse(X, Y, rx, ry, 0, a0, a1); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+function drawParticle(p, sx, sy, sc) {
+  const t = p.life / p.max; if (t >= 1) return;
+  const X = sx(p.x), Y = sy(p.y);
+  if (p.kind === 'heart') { ctx.globalAlpha = 1 - t; ctx.fillStyle = col.accent; heartPath(X, Y, (5 + t * 4) * K); ctx.globalAlpha = 1; return; }
+  const r = (p.r + t * (p.kind === 'poof' ? 26 : p.kind === 'dust' ? 10 : 9)) * K;
+  ctx.globalAlpha = (1 - t) * (p.kind === 'dust' ? 0.6 : 0.85);
+  ctx.fillStyle = p.kind === 'dust' ? col.muted : col.cloud;
+  ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+}
+function mix(a, b, t) {
+  const pa = hex(a), pb = hex(b); if (!pa || !pb) return a;
+  return `rgb(${pa.map((v, i) => Math.round(lerp(v, pb[i], t))).join(',')})`;
+}
+function hex(c) { const m = /^#([0-9a-f]{6})$/i.exec(c); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+
+/* ---------- HUD ---------- */
+let hudT = 0, coachTxt = '';
+function hud(dt) {
+  const s = S; hudT += dt; if (hudT < 0.08) return; hudT = 0;
+  const v = kmh(s);
+  $('#gSpd').innerHTML = `${Math.round(v)} <small>km/h</small>`;
+  $('#gSpdBar').style.width = clamp(v / 500 * 100, 0, 100) + '%';
+  $('#gSpdBar').style.background = v >= 250 ? 'var(--good)' : 'var(--air)';
+  $('#gAlt').innerHTML = `${Math.max(0, Math.round(s.y))} <small>m</small>`;
+  $('#gAltBar').style.width = clamp(s.y / 1200 * 100, 0, 100) + '%';
+  const vs = s.vy;
+  $('#gVs').textContent = s.ground ? 'rolling' : Math.abs(vs) < 1 ? 'level' : (vs > 0 ? '▲ up ' : '▼ down ') + Math.abs(vs).toFixed(0) + ' m/s';
+  const a = s.ground ? s.th : s.alpha;
+  $('#gAoa').textContent = Math.round(a) + '°';
+  $('#gAoaN').style.left = clamp((a + 5) / 30 * 100, 0, 100) + '%';
+  $('#thrTxt').textContent = s.engineOut ? 'engines off' : Math.round(s.thr * 100) + '%';
+  if (document.activeElement !== $('#thr')) $('#thr').value = Math.round(s.thr * 100);
+  // warnings
+  const w = $('#warn');
+  if (s.crashed) w.hidden = true;
+  else if (s.stalled) { w.hidden = false; w.className = 'warn'; w.textContent = 'STALL!'; }
+  else if (!s.ground && s.alpha > 12) { w.hidden = false; w.className = 'warn y'; w.textContent = 'careful, near stall'; }
+  else if (!s.ground && s.y < 120 && s.vy < -7 && mode === 'fly') { w.hidden = false; w.className = 'warn y'; w.textContent = 'pull up!'; }
+  else w.hidden = true;
+  // chips + coach
+  if (mission) {
+    $('#chips').innerHTML = `<span class="chip acc">Lesson ${mission.n}</span>` + mission.chips(s).map(c => `<span class="chip">${c}</span>`).join('');
+    let t = s.crashed ? '' : (s.stalled && mission.id !== 'stall' ? 'STALL! <b>Nose down</b> and add <b>power</b>!' : mission.coach(s));
+    if (t !== coachTxt) { coachTxt = t; $('#bub').innerHTML = t; $('#coach').classList.toggle('hide', !t); }
+  }
+}
+
+/* ---------- loop ---------- */
+let last = performance.now(), acc = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (S && !paused) {
+    // throttle keys
+    if (mode === 'fly' && !S.engineOut && !S.crashed) {
+      if (input.thrUp) S.thr = clamp(S.thr + dt * 0.6, 0, 1);
+      if (input.thrDown) S.thr = clamp(S.thr - dt * 0.6, 0, 1);
+    }
+    if (!S.crashed) {
+      acc += dt * TS; const h = 1 / 120;
+      while (acc >= h) { const px = S.x; step(S, h); if (S.rings.length) ringPass(S, px); acc -= h; if (S.crashed) break; }
+    }
+    for (const p of particles) { p.life += dt; p.x += p.vx * dt * 0.4; p.y += p.vy * dt * 0.4; }
+    particles = particles.filter(p => p.life < p.max);
+    if (mode === 'fly' && mission) {
+      if (!S.done) { const r = mission.check(S); if (r) { S.done = true; if (r.win) { beep(660, .12); setTimeout(() => beep(990, .2), 120); failTimer = 0.9; pendingResult = r; } else { failTimer = 0.4; pendingResult = r; } } }
+      if (pendingResult) { failTimer -= dt; if (failTimer <= 0) { showResult(pendingResult); pendingResult = null; } }
+      hud(dt);
+    }
+    if (mode === 'menu' && S.auto && S.x > 30000) attract();
+    // sound
+    if (AC && eng) {
+      const on = soundOn && (mode === 'fly' || mode === 'result') && !S.crashed;
+      const thr = S.engineOut ? 0 : S.thr;
+      eng.g.gain.setTargetAtTime(on ? 0.015 + thr * 0.05 : 0, AC.currentTime, 0.1);
+      eng.o.frequency.setTargetAtTime(48 + thr * 46, AC.currentTime, 0.2); eng.o2.frequency.setTargetAtTime(96 + thr * 90 + kmh(S) * 0.05, AC.currentTime, 0.2);
+      if (on && S.stalled) { beepT -= dt; if (beepT <= 0) { beep(900, 0.12); beepT = 0.3; } }
+    }
+  }
+  if (S) render(paused ? 0 : dt);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- UI: views ---------- */
+const STAR = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z" fill="${on ? 'var(--sun)' : 'var(--chip)'}" stroke="var(--outline)" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+function setMode(m) {
+  mode = m;
+  $('#menuView').hidden = m !== 'menu'; $('#briefView').hidden = m !== 'brief'; $('#resultView').hidden = m !== 'result'; $('#flyView').hidden = m !== 'fly';
+  $('#pauseBtn').hidden = m !== 'fly';
+  if (m !== 'fly') { $('#warn').hidden = true; }
+  if (m === 'menu' || m === 'brief') { $('#chips').innerHTML = ''; $('#coach').classList.add('hide'); coachTxt = ''; }
+  if (m === 'result') $('#coach').classList.add('hide');
+  if (m === 'fly') coachTxt = '';
+  if (m === 'menu') renderMenu();
+}
+function renderMenu() {
+  $('#lessons').innerHTML = MISSIONS.map(m => {
+    const st = best[m.id] || 0;
+    return `<button class="lesson" data-id="${m.id}"><span class="n">${m.n}</span><span class="info"><span class="t">${m.title}</span><br><span class="d">${m.short}</span></span>${m.id === 'free' ? '' : `<span class="stars" aria-label="${st} of 3 stars">${[1, 2, 3].map(i => STAR(i <= st)).join('')}</span>`}</button>`;
+  }).join('');
+  document.querySelectorAll('.lesson').forEach(b => b.onclick = () => brief(MISSIONS.find(m => m.id === b.dataset.id)));
+}
+function brief(m) {
+  mission = m;
+  $('#bEye').textContent = m.id === 'free' ? 'free flight' : `lesson ${m.n} of 5`;
+  $('#bTitle').textContent = m.title; $('#bText').textContent = m.brief; $('#bGoal').textContent = m.goal;
+  setMode('brief'); $('#briefView').scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+}
+function showResult(r) {
+  const m = mission, win = !!r.win;
+  $('#rEye').textContent = m.id === 'free' ? 'free flight' : `lesson ${m.n}`;
+  $('#rTitle').textContent = win ? (r.win === 3 ? 'Perfect, Captain Katja!' : 'Lesson complete!') : 'Oops! Let\'s try that again';
+  $('#rStars').innerHTML = win ? [1, 2, 3].map(i => STAR(i <= r.win)).join('') : '';
+  $('#rStars').hidden = !win;
+  $('#rText').textContent = win ? (r.note || '') : r.fail;
+  $('#rLearn').textContent = m.learn ? 'What you learned: ' + m.learn : ''; $('#rLearn').hidden = !(win && m.learn);
+  if (win) { best[m.id] = Math.max(best[m.id] || 0, r.win); saveBest(); }
+  const next = MISSIONS[MISSIONS.indexOf(m) + 1];
+  $('#nextBtn').hidden = !(win && next); $('#nextBtn').textContent = next && next.id === 'free' ? 'Free flight' : 'Next lesson';
+  $('#retryBtn').textContent = win ? 'Fly it again' : 'Try again';
+  setMode('result');
+  $('#resultView').scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+}
+$('#goBtn').onclick = () => { startMission(mission); $('#sky').scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' }); };
+$('#backBtn').onclick = () => { attract(); setMode('menu'); };
+$('#menuBtn').onclick = () => { attract(); setMode('menu'); };
+$('#retryBtn').onclick = () => startMission(mission);
+$('#nextBtn').onclick = () => brief(MISSIONS[MISSIONS.indexOf(mission) + 1]);
+
+/* ---------- controls ---------- */
+function hold(btn, key) {
+  const on = e => { e.preventDefault(); input[key] = true; btn.classList.add('held'); try { btn.setPointerCapture(e.pointerId); } catch (_) {} };
+  const off = () => { input[key] = false; btn.classList.remove('held'); };
+  btn.addEventListener('pointerdown', on); btn.addEventListener('pointerup', off); btn.addEventListener('pointercancel', off); btn.addEventListener('lostpointercapture', off);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+}
+hold($('#upBtn'), 'up'); hold($('#downBtn'), 'down');
+$('#thr').addEventListener('input', () => { if (S && !S.engineOut) S.thr = $('#thr').value / 100; });
+function syncButtons() {
+  $('#gearBtn').setAttribute('aria-pressed', S.gear); $('#gearBtn').textContent = 'Wheels: ' + (S.gear ? 'down' : 'up');
+  $('#forceBtn').setAttribute('aria-pressed', forcesOn);
+}
+function toggleGear() { if (!S || S.ground || mode !== 'fly') return; S.gear = !S.gear; syncButtons(); beep(S.gear ? 300 : 400, 0.08, 0.05); }
+$('#gearBtn').onclick = toggleGear;
+$('#forceBtn').onclick = () => { forcesOn = !forcesOn; syncButtons(); };
+function pause(p) { if (mode !== 'fly' && p) return; paused = p; $('#pauseCard').hidden = !p; Object.keys(input).forEach(k => input[k] = false); }
+$('#pauseBtn').onclick = () => pause(true);
+$('#resumeBtn').onclick = () => pause(false);
+$('#quitBtn').onclick = () => { pause(false); attract(); setMode('menu'); };
+document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'fly') pause(true); });
+const KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowRight: 'thrUp', KeyD: 'thrUp', ArrowLeft: 'thrDown', KeyA: 'thrDown' };
+addEventListener('keydown', e => {
+  if (mode !== 'fly') return;
+  if (KEYS[e.code]) { input[KEYS[e.code]] = true; e.preventDefault(); if (document.activeElement && document.activeElement.type === 'range') document.activeElement.blur(); }
+  else if (e.code === 'KeyG') toggleGear();
+  else if (e.code === 'KeyF') { forcesOn = !forcesOn; syncButtons(); }
+  else if (e.code === 'KeyP' || e.code === 'Escape') pause(!paused);
+});
+addEventListener('keyup', e => { if (KEYS[e.code]) input[KEYS[e.code]] = false; });
+addEventListener('blur', () => Object.keys(input).forEach(k => input[k] = false));
+
+/* ---------- boot ---------- */
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+resize(); attract(); setMode('menu');
+requestAnimationFrame(frame);
+window.__fly = { get S() { return S; }, input, MISSIONS, startMission, get mode() { return mode; } }; // used for automated playtesting
+})();
+</script>
+</body>
+</html>
