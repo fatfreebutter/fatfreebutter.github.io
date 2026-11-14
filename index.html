@@ -148,6 +148,40 @@ h1 i,h2 i,.statement i{font-size:1.1em;line-height:.9}
 .pulse{display:inline-block;width:6px;height:6px;border-radius:50%;background:#4cc38a;margin-right:8px;vertical-align:2px;box-shadow:0 0 0 0 rgba(76,195,138,.5);animation:pulse 2.4s ease-out infinite}
 @keyframes pulse{to{box-shadow:0 0 0 9px rgba(76,195,138,0)}}
 
+/* ---------- pixel portrait: a small figure that turns in 3D with the scroll ---------- */
+.hero-meta{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.me{flex:none;display:grid;justify-items:end;gap:10px;perspective:640px}
+.me-card{
+  position:relative;width:clamp(96px,10vw,128px);aspect-ratio:1;
+  transform-style:preserve-3d;will-change:transform;
+  transform:
+    translateY(calc(var(--hp,0)*-30px))
+    rotateY(calc(-18deg + var(--hp,0)*46deg + var(--px,0)*12deg))
+    rotateX(calc(8deg - var(--hp,0)*22deg - var(--py,0)*12deg));
+  transition:transform .45s var(--ease);
+}
+.me-card::before{ /* the plate: same grid as the hero, in miniature */
+  content:'';position:absolute;inset:0;border:1px solid var(--line);border-radius:14px;
+  background:
+    linear-gradient(var(--line) 1px,transparent 1px) 0 0/100% 12.5%,
+    linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/12.5% 100%,
+    radial-gradient(circle at 70% 20%,var(--glow),transparent 70%),
+    var(--panel);
+}
+.me-sprite{ /* four frames side by side; the keyframes hold each one, then blink */
+  position:absolute;inset:0;transform:translateZ(26px);
+  background:url(assets/me-pixel.webp) 0 0/400% 100% no-repeat;
+  image-rendering:pixelated;image-rendering:crisp-edges;
+  animation:me-idle 4.8s step-end infinite;
+}
+@keyframes me-idle{
+  0%,70%,91%{background-position-x:0}
+  18%,54%{background-position-x:33.333%}
+  36%{background-position-x:100%}
+  88%{background-position-x:66.667%}
+}
+.me figcaption{transform:translateY(calc(var(--hp,0)*-30px))}
+
 /* ---------- statement + three figures ---------- */
 .sec{padding-top:clamp(96px,17vh,190px)}
 .statement{font-size:clamp(1.7rem,4.3vw,3.5rem);font-weight:500;letter-spacing:-.032em;line-height:1.1;max-width:17em;margin-top:22px}
@@ -257,7 +291,7 @@ footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;pa
   .js .reveal,.js [data-split] .w{opacity:1;filter:none;transform:none}
   .js [data-lit] .w{opacity:1}
   .js .rule::before{transform:none}
-  .hero h1,.hero-bg::before,.hero-bg::after,.panel{transform:none}
+  .hero h1,.hero-bg::before,.hero-bg::after,.panel,.me-card,.me figcaption{transform:none}
 }
 </style>
 </head>
@@ -284,6 +318,7 @@ footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;pa
   <h1 data-split>Anurag. <span class="dim">I secure systems and</span> <i>teach machines to think.</i></h1>
   <div class="hero-foot rule reveal" style="--i:7">
     <p class="lede">Three years guarding enterprise cloud taught me how systems break. Now I'm at the University of Freiburg learning how they think: deep in machine learning and AI, one experiment at a time.</p>
+    <div class="hero-meta">
     <dl class="now">
       <div>
         <dt class="mono">Currently</dt>
@@ -294,6 +329,11 @@ footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;pa
         <dd>MSc Computer Science <span class="dim">· University of Freiburg</span></dd>
       </div>
     </dl>
+    <figure class="me" id="me">
+      <div class="me-card"><div class="me-sprite" role="img" aria-label="Pixel-art portrait of Anurag wearing headphones"></div></div>
+      <figcaption class="mono">Fig 0.0</figcaption>
+    </figure>
+    </div>
   </div>
 </section>
 
@@ -567,6 +607,16 @@ footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;pa
   }, { passive: true });
   addEventListener('resize', update);
   update();
+
+  // The portrait leans a little toward the pointer (mouse only).
+  const me = $('me');
+  if (me && matchMedia('(hover:hover) and (prefers-reduced-motion:no-preference)').matches) {
+    hero.addEventListener('pointermove', e => {
+      me.style.setProperty('--px', (e.clientX / innerWidth - .5).toFixed(3));
+      me.style.setProperty('--py', (e.clientY / innerHeight - .5).toFixed(3));
+    });
+    hero.addEventListener('pointerleave', () => { me.style.setProperty('--px', 0); me.style.setProperty('--py', 0); });
+  }
 
   // Light that follows the pointer on the work panels
   panels.forEach(p => p.addEventListener('pointermove', e => {
